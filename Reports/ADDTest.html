@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>ADDTest.html</h1>
+    <p>Report generated on 06-Jun-2022 at 14:58:41 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.2"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>macOS-12.4-x86_64-i386-64bit</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "2.0.1"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.8.10</td></tr></table>
+    <h2>Summary</h2>
+    <p>9 tests ran in 79.13 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">6 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">3 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">USER/test_LogOut.py::Test_Logout::test_Logout</td>
+          <td class="col-duration">1.22</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Response [400]&gt;, kwargs = {}<br/><br/>    def json(self, **kwargs):<br/>        r&quot;&quot;&quot;Returns the json-encoded content of a response, if any.<br/>    <br/>        :param \*\*kwargs: Optional arguments that ``json.loads`` takes.<br/>        :raises requests.exceptions.JSONDecodeError: If the response body does not<br/>            contain valid json.<br/>        &quot;&quot;&quot;<br/>    <br/>        if not self.encoding and self.content and len(self.content) &gt; 3:<br/>            # No encoding set. JSON RFC 4627 section 3 states we should expect<br/>            # UTF-8, -16 or -32. Detect which one to use; If the detection or<br/>            # decoding fails, fall back to `self.text` (using charset_normalizer to make<br/>            # a best guess).<br/>            encoding = guess_json_utf(self.content)<br/>            if encoding is not None:<br/>                try:<br/>                    return complexjson.loads(<br/>                        self.content.decode(encoding), **kwargs<br/>                    )<br/>                except UnicodeDecodeError:<br/>                    # Wrong UTF codec detected; usually because it&#x27;s not UTF-8<br/>                    # but some other 8-bit codec.  This is an RFC violation,<br/>                    # and the server didn&#x27;t bother to tell us what codec *was*<br/>                    # used.<br/>                    pass<br/>    <br/>        try:<br/>&gt;           return complexjson.loads(self.text, **kwargs)<br/><br/>venv/lib/python3.8/site-packages/requests/models.py:910: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>s = &#x27;&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n&lt;head&gt;\n&lt;meta charset=&quot;utf-8&quot;&gt;\n&lt;title&gt;Error&lt;/title&gt;\n&lt;/head&gt;\n&lt;body&gt;\n&lt;pre&gt;Bad Request&lt;/pre&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n&#x27;, cls = None<br/>object_hook = None, parse_float = None, parse_int = None, parse_constant = None, object_pairs_hook = None, kw = {}<br/><br/>    def loads(s, *, cls=None, object_hook=None, parse_float=None,<br/>            parse_int=None, parse_constant=None, object_pairs_hook=None, **kw):<br/>        &quot;&quot;&quot;Deserialize ``s`` (a ``str``, ``bytes`` or ``bytearray`` instance<br/>        containing a JSON document) to a Python object.<br/>    <br/>        ``object_hook`` is an optional function that will be called with the<br/>        result of any object literal decode (a ``dict``). The return value of<br/>        ``object_hook`` will be used instead of the ``dict``. This feature<br/>        can be used to implement custom decoders (e.g. JSON-RPC class hinting).<br/>    <br/>        ``object_pairs_hook`` is an optional function that will be called with the<br/>        result of any object literal decoded with an ordered list of pairs.  The<br/>        return value of ``object_pairs_hook`` will be used instead of the ``dict``.<br/>        This feature can be used to implement custom decoders.  If ``object_hook``<br/>        is also defined, the ``object_pairs_hook`` takes priority.<br/>    <br/>        ``parse_float``, if specified, will be called with the string<br/>        of every JSON float to be decoded. By default this is equivalent to<br/>        float(num_str). This can be used to use another datatype or parser<br/>        for JSON floats (e.g. decimal.Decimal).<br/>    <br/>        ``parse_int``, if specified, will be called with the string<br/>        of every JSON int to be decoded. By default this is equivalent to<br/>        int(num_str). This can be used to use another datatype or parser<br/>        for JSON integers (e.g. float).<br/>    <br/>        ``parse_constant``, if specified, will be called with one of the<br/>        following strings: -Infinity, Infinity, NaN.<br/>        This can be used to raise an exception if invalid JSON numbers<br/>        are encountered.<br/>    <br/>        To use a custom ``JSONDecoder`` subclass, specify it with the ``cls``<br/>        kwarg; otherwise ``JSONDecoder`` is used.<br/>    <br/>        The ``encoding`` argument is ignored and deprecated since Python 3.1.<br/>        &quot;&quot;&quot;<br/>        if isinstance(s, str):<br/>            if s.startswith(&#x27;\ufeff&#x27;):<br/>                raise JSONDecodeError(&quot;Unexpected UTF-8 BOM (decode using utf-8-sig)&quot;,<br/>                                      s, 0)<br/>        else:<br/>            if not isinstance(s, (bytes, bytearray)):<br/>                raise TypeError(f&#x27;the JSON object must be str, bytes or bytearray, &#x27;<br/>                                f&#x27;not {s.__class__.__name__}&#x27;)<br/>            s = s.decode(detect_encoding(s), &#x27;surrogatepass&#x27;)<br/>    <br/>        if &quot;encoding&quot; in kw:<br/>            import warnings<br/>            warnings.warn(<br/>                &quot;&#x27;encoding&#x27; is ignored and deprecated. It will be removed in Python 3.9&quot;,<br/>                DeprecationWarning,<br/>                stacklevel=2<br/>            )<br/>            del kw[&#x27;encoding&#x27;]<br/>    <br/>        if (cls is None and object_hook is None and<br/>                parse_int is None and parse_float is None and<br/>                parse_constant is None and object_pairs_hook is None and not kw):<br/>&gt;           return _default_decoder.decode(s)<br/><br/>/Library/Frameworks/Python.framework/Versions/3.8/lib/python3.8/json/__init__.py:357: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;json.decoder.JSONDecoder object at 0x109a1fee0&gt;<br/>s = &#x27;&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n&lt;head&gt;\n&lt;meta charset=&quot;utf-8&quot;&gt;\n&lt;title&gt;Error&lt;/title&gt;\n&lt;/head&gt;\n&lt;body&gt;\n&lt;pre&gt;Bad Request&lt;/pre&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n&#x27;<br/>_w = &lt;built-in method match of re.Pattern object at 0x10986d9f0&gt;<br/><br/>    def decode(self, s, _w=WHITESPACE.match):<br/>        &quot;&quot;&quot;Return the Python representation of ``s`` (a ``str`` instance<br/>        containing a JSON document).<br/>    <br/>        &quot;&quot;&quot;<br/>&gt;       obj, end = self.raw_decode(s, idx=_w(s, 0).end())<br/><br/>/Library/Frameworks/Python.framework/Versions/3.8/lib/python3.8/json/decoder.py:337: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;json.decoder.JSONDecoder object at 0x109a1fee0&gt;<br/>s = &#x27;&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n&lt;head&gt;\n&lt;meta charset=&quot;utf-8&quot;&gt;\n&lt;title&gt;Error&lt;/title&gt;\n&lt;/head&gt;\n&lt;body&gt;\n&lt;pre&gt;Bad Request&lt;/pre&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n&#x27;, idx = 0<br/><br/>    def raw_decode(self, s, idx=0):<br/>        &quot;&quot;&quot;Decode a JSON document from ``s`` (a ``str`` beginning with<br/>        a JSON document) and return a 2-tuple of the Python<br/>        representation and the index in ``s`` where the document ended.<br/>    <br/>        This can be used to decode a JSON document from a string that may<br/>        have extraneous data at the end.<br/>    <br/>        &quot;&quot;&quot;<br/>        try:<br/>            obj, end = self.scan_once(s, idx)<br/>        except StopIteration as err:<br/>&gt;           raise JSONDecodeError(&quot;Expecting value&quot;, s, err.value) from None<br/><span class="error">E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</span><br/><br/>/Library/Frameworks/Python.framework/Versions/3.8/lib/python3.8/json/decoder.py:355: JSONDecodeError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>self = &lt;USER.test_LogOut.Test_Logout object at 0x10b4054c0&gt;<br/><br/>    def test_Logout(self):<br/>        payload = &quot;&quot;<br/>        print(payload)<br/>        req = requests.post(URLS.allurl.Logout(), json=payload)<br/>&gt;       print(req.json())<br/><br/>USER/test_LogOut.py:12: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;Response [400]&gt;, kwargs = {}<br/><br/>    def json(self, **kwargs):<br/>        r&quot;&quot;&quot;Returns the json-encoded content of a response, if any.<br/>    <br/>        :param \*\*kwargs: Optional arguments that ``json.loads`` takes.<br/>        :raises requests.exceptions.JSONDecodeError: If the response body does not<br/>            contain valid json.<br/>        &quot;&quot;&quot;<br/>    <br/>        if not self.encoding and self.content and len(self.content) &gt; 3:<br/>            # No encoding set. JSON RFC 4627 section 3 states we should expect<br/>            # UTF-8, -16 or -32. Detect which one to use; If the detection or<br/>            # decoding fails, fall back to `self.text` (using charset_normalizer to make<br/>            # a best guess).<br/>            encoding = guess_json_utf(self.content)<br/>            if encoding is not None:<br/>                try:<br/>                    return complexjson.loads(<br/>                        self.content.decode(encoding), **kwargs<br/>                    )<br/>                except UnicodeDecodeError:<br/>                    # Wrong UTF codec detected; usually because it&#x27;s not UTF-8<br/>                    # but some other 8-bit codec.  This is an RFC violation,<br/>                    # and the server didn&#x27;t bother to tell us what codec *was*<br/>                    # used.<br/>                    pass<br/>    <br/>        try:<br/>            return complexjson.loads(self.text, **kwargs)<br/>        except JSONDecodeError as e:<br/>            # Catch JSON-related errors and raise as requests.JSONDecodeError<br/>            # This aliases json.JSONDecodeError and simplejson.JSONDecodeError<br/>            if is_py2: # e is a ValueError<br/>                raise RequestsJSONDecodeError(e.message)<br/>            else:<br/>&gt;               raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)<br/><span class="error">E               requests.exceptions.JSONDecodeError: [Errno Expecting value] &lt;!DOCTYPE html&gt;</span><br/><span class="error">E               &lt;html lang=&quot;en&quot;&gt;</span><br/><span class="error">E               &lt;head&gt;</span><br/><span class="error">E               &lt;meta charset=&quot;utf-8&quot;&gt;</span><br/><span class="error">E               &lt;title&gt;Error&lt;/title&gt;</span><br/><span class="error">E               &lt;/head&gt;</span><br/><span class="error">E               &lt;body&gt;</span><br/><span class="error">E               &lt;pre&gt;Bad Request&lt;/pre&gt;</span><br/><span class="error">E               &lt;/body&gt;</span><br/><span class="error">E               &lt;/html&gt;</span><br/><span class="error">E               : 0</span><br/><br/>venv/lib/python3.8/site-packages/requests/models.py:917: JSONDecodeError<br/> ------------------------------Captured stdout call------------------------------ <br/>
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">USER/test_Register_User.py::Test_Register::test_Registers</td>
+          <td class="col-duration">1.40</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;USER.test_Register_User.Test_Register object at 0x10b405a30&gt;<br/><br/>    def test_Registers(self):<br/>        payload = Datafile.Creatuser.dataread.createuser()<br/>        print(payload)<br/>        req=requests.post(URLS.allurl.createurl(),json=payload)<br/>        print(req.json())<br/>&gt;       token=req.json()[&#x27;token&#x27;]<br/><span class="error">E       TypeError: string indices must be integers</span><br/><br/>USER/test_Register_User.py:17: TypeError<br/> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;name&#x27;: &#x27;Siddharth kalidas&#x27;, &#x27;email&#x27;: &#x27;Siddharth@gmail.com&#x27;, &#x27;password&#x27;: &#x27;12345678&#x27;, &#x27;age&#x27;: 24}
+E11000 duplicate key error collection: todo-list.users index: email_1 dup key: { email: &quot;siddharth@gmail.com&quot; }
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">USER/test_UpdateUserProfile.py::Test_Register::test_Registers</td>
+          <td class="col-duration">1.32</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;USER.test_Register_User.Test_Register object at 0x10b405ca0&gt;<br/><br/>    def test_Registers(self):<br/>        payload = Datafile.Creatuser.dataread.createuser()<br/>        print(payload)<br/>        req=requests.post(URLS.allurl.createurl(),json=payload)<br/>        print(req.json())<br/>&gt;       token=req.json()[&#x27;token&#x27;]<br/><span class="error">E       TypeError: string indices must be integers</span><br/><br/>USER/test_Register_User.py:17: TypeError<br/> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;name&#x27;: &#x27;Siddharth kalidas&#x27;, &#x27;email&#x27;: &#x27;Siddharth@gmail.com&#x27;, &#x27;password&#x27;: &#x27;12345678&#x27;, &#x27;age&#x27;: 24}
+E11000 duplicate key error collection: todo-list.users index: email_1 dup key: { email: &quot;siddharth@gmail.com&quot; }
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">USER/test_AddTask.py::Test_UserUpdate::test_UserProfile</td>
+          <td class="col-duration">67.66</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>20
+TaskValue
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NDR9.CRDW2v1dH0LNZj_S4FwbhTe5Sg2zWF9smf5pjn5b2Po
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc87d64a06d0017d40f3f&#x27;, &#x27;description&#x27;: &#x27;TaskValue&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:25.875Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:25.875Z&#x27;, &#x27;__v&#x27;: 0}}
+reading book
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NDd9.hoYZhkUTBpgmbQGbBFS9f3ksE7y4RIiwsgOoDsqrca0
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc88164a06d0017d40f41&#x27;, &#x27;description&#x27;: &#x27;reading book&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:29.899Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:29.899Z&#x27;, &#x27;__v&#x27;: 0}}
+playing
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NTF9.iPR42W626vVvQUi5l7QK1wOrBZcqNQLFJJETs-NsUDs
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc88564a06d0017d40f43&#x27;, &#x27;description&#x27;: &#x27;playing&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:33.170Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:33.170Z&#x27;, &#x27;__v&#x27;: 0}}
+singing
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NTR9.u2wZ0k82uEotsEm57Cd7kvS1pGFU5uBd2YVLnrLL8z4
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc88864a06d0017d40f46&#x27;, &#x27;description&#x27;: &#x27;singing&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:36.335Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:36.335Z&#x27;, &#x27;__v&#x27;: 0}}
+woking
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NTd9.BQyNdhzKEtQ2FZ8OVJciU3TlEX1FNDltes8IDJWgXWE
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc88b64a06d0017d40f48&#x27;, &#x27;description&#x27;: &#x27;woking&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:39.673Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:39.673Z&#x27;, &#x27;__v&#x27;: 0}}
+watching
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NjF9.q2H_3LpLlpzOO5iKBzy3BKdrKsFOe4CwilqZkTXDdVw
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc88e64a06d0017d40f4a&#x27;, &#x27;description&#x27;: &#x27;watching&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:42.995Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:42.995Z&#x27;, &#x27;__v&#x27;: 0}}
+cooking
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NjR9.6r0rza3-2QT3B8towp55R1WGnjcn1Mo6cndpTCzzw98
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc89264a06d0017d40f4c&#x27;, &#x27;description&#x27;: &#x27;cooking&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:46.064Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:46.064Z&#x27;, &#x27;__v&#x27;: 0}}
+walking
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2Njd9.wlXpwXFXhlydjeU6lMljlh9RYh6EJvzqRqwOGYC2Miw
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc89564a06d0017d40f4e&#x27;, &#x27;description&#x27;: &#x27;walking&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:49.128Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:49.128Z&#x27;, &#x27;__v&#x27;: 0}}
+going out
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NzB9.8pFBNerFe4nqXzngGY6VnT8rGiMdIWsu0aEtbxfH2LM
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc89864a06d0017d40f50&#x27;, &#x27;description&#x27;: &#x27;going out&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:52.253Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:52.253Z&#x27;, &#x27;__v&#x27;: 0}}
+coming in 
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2NzN9.TjTaFWj_l_c8VHSxW93xETayz0sMHmrfv-WQr3Uy9sM
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc89b64a06d0017d40f52&#x27;, &#x27;description&#x27;: &#x27;coming in&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:55.581Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:55.581Z&#x27;, &#x27;__v&#x27;: 0}}
+tasking
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2Nzd9.7MBq82qvizwO_kQ_Z8do0XdleWUW85_q0E5ARUhoMuQ
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc89e64a06d0017d40f54&#x27;, &#x27;description&#x27;: &#x27;tasking&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:27:58.582Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:27:58.582Z&#x27;, &#x27;__v&#x27;: 0}}
+task2
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2ODB9.-u2dko1q9mXed_iJopvZvABX5C1G86jKHVXVeFw9hUo
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc8a164a06d0017d40f56&#x27;, &#x27;description&#x27;: &#x27;task2&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:28:01.757Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:01.757Z&#x27;, &#x27;__v&#x27;: 0}}
+hello
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2ODN9.C7t9ZEOObziz2R5XklZKwTMDtsoszzRSD5l_Zh-yzNI
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc8a464a06d0017d40f58&#x27;, &#x27;description&#x27;: &#x27;hello&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:28:04.959Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:04.959Z&#x27;, &#x27;__v&#x27;: 0}}
+bye
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2ODZ9.ZTBFmoBkqffJSiV826-NkzQmcB2VYxj2xRg__tImUyk
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc8a864a06d0017d40f5a&#x27;, &#x27;description&#x27;: &#x27;bye&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:28:08.281Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:08.281Z&#x27;, &#x27;__v&#x27;: 0}}
+going office
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2ODl9.B4X46mVid3MEguNa5YUyBk0PIp8cfdzqx9osk7vcBoE
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc8ab64a06d0017d40f5c&#x27;, &#x27;description&#x27;: &#x27;going office&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:28:11.593Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:11.593Z&#x27;, &#x27;__v&#x27;: 0}}
+get work done
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2OTN9.twNVkFsKS_uUOlio8WMlbVFzkOAoN6gwpGQyIrcd9A0
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc8ae64a06d0017d40f5e&#x27;, &#x27;description&#x27;: &#x27;get work done&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:28:14.719Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:14.719Z&#x27;, &#x27;__v&#x27;: 0}}
+fine
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc2OTl9.d_p36W7S9nJsafhzXB9hKC6QWEnWjPprHds8Cz18Fao
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc8b464a06d0017d40f60&#x27;, &#x27;description&#x27;: &#x27;fine&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:28:20.844Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:20.844Z&#x27;, &#x27;__v&#x27;: 0}}
+trading
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc3MDJ9.vu_O9XTyIGQY1TiswU6Fm7XOZhxE1GST8ZrPpBwSSWs
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc8b764a06d0017d40f62&#x27;, &#x27;description&#x27;: &#x27;trading&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:28:23.920Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:23.920Z&#x27;, &#x27;__v&#x27;: 0}}
+apple
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc3MDV9.9OPX0fekw6qUhzl4TrdhfMIfRMzQBQ_UftTlFP2mtpM
+{&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc8bb64a06d0017d40f64&#x27;, &#x27;description&#x27;: &#x27;apple&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:28:27.144Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:27.144Z&#x27;, &#x27;__v&#x27;: 0}}
+[&#x27;629dc87d64a06d0017d40f3f&#x27;, &#x27;629dc88164a06d0017d40f41&#x27;, &#x27;629dc88564a06d0017d40f43&#x27;, &#x27;629dc88864a06d0017d40f46&#x27;, &#x27;629dc88b64a06d0017d40f48&#x27;, &#x27;629dc88e64a06d0017d40f4a&#x27;, &#x27;629dc89264a06d0017d40f4c&#x27;, &#x27;629dc89564a06d0017d40f4e&#x27;, &#x27;629dc89864a06d0017d40f50&#x27;, &#x27;629dc89b64a06d0017d40f52&#x27;, &#x27;629dc89e64a06d0017d40f54&#x27;, &#x27;629dc8a164a06d0017d40f56&#x27;, &#x27;629dc8a464a06d0017d40f58&#x27;, &#x27;629dc8a864a06d0017d40f5a&#x27;, &#x27;629dc8ab64a06d0017d40f5c&#x27;, &#x27;629dc8ae64a06d0017d40f5e&#x27;, &#x27;629dc8b464a06d0017d40f60&#x27;, &#x27;629dc8b764a06d0017d40f62&#x27;, &#x27;629dc8bb64a06d0017d40f64&#x27;]
+38
+{&#x27;count&#x27;: 5, &#x27;data&#x27;: [{&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc77664a06d0017d40f0f&#x27;, &#x27;description&#x27;: &#x27;TaskValue&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:23:02.927Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:23:02.927Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc77964a06d0017d40f11&#x27;, &#x27;description&#x27;: &#x27;reading book&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:23:05.910Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:23:05.910Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc77c64a06d0017d40f13&#x27;, &#x27;description&#x27;: &#x27;playing&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:23:08.951Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:23:08.951Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc78064a06d0017d40f15&#x27;, &#x27;description&#x27;: &#x27;singing&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:23:12.135Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:23:12.135Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;629dc78364a06d0017d40f17&#x27;, &#x27;description&#x27;: &#x27;woking&#x27;, &#x27;owner&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:23:15.105Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:23:15.105Z&#x27;, &#x27;__v&#x27;: 0}]}
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_AddTask.py:44 **** get task success code verification****<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">USER/test_DeleteUser.py::Test_UserUpdate::test_UserProfile</td>
+          <td class="col-duration">1.20</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc0NDV9.vEDD_-6fDCzdEr-nOHNLQPDqbnFUopOr1h4NZfiuq7I
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">USER/test_Login.py::Test_login::test_login</td>
+          <td class="col-duration">1.71</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc3MTR9.JfzXBc7qPIsKS15YvU0tBOBCEoJly0uw_o9mRzRC66w
+{&#x27;user&#x27;: {&#x27;age&#x27;: 24, &#x27;_id&#x27;: &#x27;629dc75164a06d0017d40f0c&#x27;, &#x27;name&#x27;: &#x27;Siddharth kalidas&#x27;, &#x27;email&#x27;: &#x27;siddharth@gmail.com&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-06T09:22:25.346Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-06T09:28:34.423Z&#x27;, &#x27;__v&#x27;: 42}, &#x27;token&#x27;: &#x27;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc3MTR9.JfzXBc7qPIsKS15YvU0tBOBCEoJly0uw_o9mRzRC66w&#x27;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">USER/test_Login.py::Test_login::test_Negativelogin</td>
+          <td class="col-duration">1.67</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_Login.py:25 **** User  email able to login ****
+INFO     root:test_Login.py:27 **** User to login success code verification ****<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">USER/test_UpdateUserProfile.py::Test_UserUpdate::test_UserProfile</td>
+          <td class="col-duration">1.19</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;age&#x27;: 26}
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc3MTR9.JfzXBc7qPIsKS15YvU0tBOBCEoJly0uw_o9mRzRC66w
+{&#x27;Authorization&#x27;: &#x27;Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MjlkYzc1MTY0YTA2ZDAwMTdkNDBmMGMiLCJpYXQiOjE2NTQ1MDc3MTR9.JfzXBc7qPIsKS15YvU0tBOBCEoJly0uw_o9mRzRC66w&#x27;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">USER/test_Verification.py::Test_UserUpdate::test_UserProfile</td>
+          <td class="col-duration">1.26</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;email&#x27;: &#x27;Siddharth@gmail.com&#x27;, &#x27;password&#x27;: &#x27;12345678&#x27;}
+<br/></div></td></tr></tbody></table></body></html>
